@@ -1,0 +1,11 @@
+1. Install program.
+2. Jangan buka aplikasinya.
+3. Extract file jamu. Password: 1234
+4. Buka folder jamu.
+5. Copy file jamu dan paste ke folder instalasi:
+   C:\Program Files\PremiumSoft\Navicat Premium 16
+6. Jalankan patchnya (Run as admin). Klik patch.
+7. Done! enjoy sob.
+
+Admin
+r3ndy.com
