@@ -1,0 +1,27 @@
+version: "3.6"
+
+services:
+  notification:
+    image: ${IMAGE_VERSION}
+    networks:
+      - code-overlay
+    # ports:
+    #   - "6021:6021"
+    #   - "6024:6024"
+    env_file:
+      - ./production.env
+    deploy:
+      replicas: 1
+      # resources:
+      #   limits: 
+      #     cpus: '0.4'
+      #     memory: 256m
+      #   reservations:
+      #     cpus: '0.2'
+      #     memory: 128m
+      restart_policy: 
+        condition: on-failure
+
+networks:
+  code-overlay:
+    external: true

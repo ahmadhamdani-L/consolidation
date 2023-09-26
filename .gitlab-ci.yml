@@ -1,0 +1,186 @@
+variables:
+  IMAGE_VERSION: "$DOCKER_REGISTRY_HOST/$CI_PROJECT_PATH_SLUG:$CI_COMMIT_SHORT_SHA"
+  DEVELOPMENT_STACK_NAME: "notification-dev"
+  DEVELOPMENT_DIR_PATH: "~/$CI_PROJECT_NAME/dev"
+  STAGING_STACK_NAME: "notification-stag"
+  STAGING_DIR_PATH: "~/$CI_PROJECT_NAME/stag"
+  PRODUCTION_STACK_NAME: "notification-prod"
+  PRODUCTION_DIR_PATH: "~/$CI_PROJECT_NAME/prod"
+
+stages:
+  # Development
+  - build-development
+  - push-development
+  - deploy-development
+
+  # Staging
+  - build-staging
+  - push-staging
+  - deploy-staging
+
+  # Production
+  - tag-production
+  - build-production
+  - push-production
+  - deploy-production
+
+# Stage - Development
+build-development:
+  stage: build-development
+  script:
+    - docker build --build-arg PASSWORD=$PASSWORD_DEVELOPMENT -f Dockerfile.development -t $IMAGE_VERSION .
+  tags:
+    - development
+  only:
+    - development
+
+push-development:
+  stage: push-development
+  before_script:
+    - echo "$DOCKER_REGISTRY_IP $DOCKER_REGISTRY_HOST" >> /etc/hosts
+    - docker login -u $DOCKER_REGISTRY_USER -p $DOCKER_REGISTRY_PASS $DOCKER_REGISTRY_HOST
+  script:
+    - docker push $IMAGE_VERSION
+  tags:
+    - development
+  only:
+    - development
+
+deploy-development:
+  stage: deploy-development
+  before_script:
+    - "command -v ssh-agent >/dev/null || ( apk add --update openssh )"
+    - eval $(ssh-agent -s)
+    - echo "$ID_RSA_DEVELOPMENT" | tr -d '\r' | ssh-add -
+    - mkdir -p ~/.ssh
+    - chmod 700 ~/.ssh
+    - ssh-keyscan $SERVER_DEVELOPMENT >> ~/.ssh/known_hosts
+    - chmod 644 ~/.ssh/known_hosts
+    # - echo "$DOCKER_REGISTRY_IP $DOCKER_REGISTRY_HOST" >> /etc/hosts
+    # - docker login -u $DOCKER_REGISTRY_USER -p $DOCKER_REGISTRY_PASS $DOCKER_REGISTRY_HOST
+  script:
+    # - docker stack deploy -c deploy/development.yml --with-registry-auth notification-dev
+    - ssh $SERVER_DEVELOPMENT_USER@$SERVER_DEVELOPMENT "docker login -u $DOCKER_REGISTRY_USER -p $DOCKER_REGISTRY_PASS $DOCKER_REGISTRY_HOST"
+    - ssh $SERVER_DEVELOPMENT_USER@$SERVER_DEVELOPMENT "docker pull $IMAGE_VERSION"
+    - ssh $SERVER_DEVELOPMENT_USER@$SERVER_DEVELOPMENT "mkdir -p $DEVELOPMENT_DIR_PATH"
+    - scp ./deploy/development.yml $SERVER_DEVELOPMENT_USER@$SERVER_DEVELOPMENT:$DEVELOPMENT_DIR_PATH/development.yml
+    - scp ./deploy/development.env $SERVER_DEVELOPMENT_USER@$SERVER_DEVELOPMENT:$DEVELOPMENT_DIR_PATH/development.env
+    - ssh $SERVER_DEVELOPMENT_USER@$SERVER_DEVELOPMENT "IMAGE_VERSION=$IMAGE_VERSION bash -c 'docker stack deploy -c $DEVELOPMENT_DIR_PATH/development.yml --with-registry-auth $DEVELOPMENT_STACK_NAME'"
+  tags:
+    # - deploy-development
+    - development
+  only:
+    - development
+
+# Stage - Staging
+build-staging:
+  stage: build-staging
+  script:
+    - docker build -f Dockerfile.staging -t $IMAGE_VERSION .
+  tags:
+    - staging
+  only:
+    - staging
+
+push-staging:
+  stage: push-staging
+  before_script:
+    - echo "$DOCKER_REGISTRY_IP $DOCKER_REGISTRY_HOST" >> /etc/hosts
+    - docker login -u $DOCKER_REGISTRY_USER -p $DOCKER_REGISTRY_PASS $DOCKER_REGISTRY_HOST
+  script:
+    - docker push $IMAGE_VERSION
+  tags:
+    - staging
+  only:
+    - staging
+
+deploy-staging:
+  stage: deploy-staging
+  before_script:
+    - "command -v ssh-agent >/dev/null || ( apk add --update openssh )"
+    - eval $(ssh-agent -s)
+    - echo "$ID_RSA_STAGING" | tr -d '\r' | ssh-add -
+    - mkdir -p ~/.ssh
+    - chmod 700 ~/.ssh
+    - ssh-keyscan $SERVER_STAGING >> ~/.ssh/known_hosts
+    - chmod 644 ~/.ssh/known_hosts
+    # - echo "$DOCKER_REGISTRY_IP $DOCKER_REGISTRY_HOST" >> /etc/hosts
+    # - docker login -u $DOCKER_REGISTRY_USER -p $DOCKER_REGISTRY_PASS $DOCKER_REGISTRY_HOST
+  script:
+    # - docker stack deploy -c deploy/staging.yml --with-registry-auth notification-stag
+    - ssh $SERVER_STAGING_USER@$SERVER_STAGING "docker login -u $DOCKER_REGISTRY_USER -p $DOCKER_REGISTRY_PASS $DOCKER_REGISTRY_HOST"
+    - ssh $SERVER_STAGING_USER@$SERVER_STAGING "docker pull $IMAGE_VERSION"
+    - ssh $SERVER_STAGING_USER@$SERVER_STAGING "mkdir -p $DEVELOPMENT_DIR_PATH"
+    - scp ./deploy/staging.yml $SERVER_STAGING_USER@$SERVER_STAGING:$STAGING_DIR_PATH/staging.yml
+    - scp ./deploy/staging.env $SERVER_STAGING_USER@$SERVER_STAGING:$STAGING_DIR_PATH/staging.env
+    - ssh $SERVER_STAGING_USER@$SERVER_STAGING "IMAGE_VERSION=$IMAGE_VERSION bash -c 'docker stack deploy -c $STAGING_DIR_PATH/staging.yml --with-registry-auth $STAGING_STACK_NAME'"
+  tags:
+    - deploy-staging
+  only:
+    - staging
+
+# Stage - Production
+tag-production:
+  stage: tag-production
+  image: node:16.14.2-alpine
+  variables:
+    GITLAB_TOKEN: $SEMANTIC_RELEASE_TOKEN
+  before_script:
+    - apk add --no-cache git
+    - npm install -g semantic-release @semantic-release/gitlab
+  script:
+    - semantic-release
+    - git tag --points-at > version
+  artifacts:
+    paths:
+      - version
+  tags:
+    - production
+  only:
+    - production
+
+build-production:
+  stage: build-production
+  script:
+    - docker build -f Dockerfile.production -t $IMAGE_VERSION .
+  tags:
+    - production
+  only:
+    - tags
+
+push-production:
+  stage: push-production
+  before_script:
+    - echo "$DOCKER_REGISTRY_IP $DOCKER_REGISTRY_HOST" >> /etc/hosts
+    - docker login -u $DOCKER_REGISTRY_USER -p $DOCKER_REGISTRY_PASS $DOCKER_REGISTRY_HOST
+  script:
+    - docker push $IMAGE_VERSION
+  tags:
+    - production
+  only:
+    - tags
+
+deploy-production:
+  stage: deploy-production
+  before_script:
+    - "command -v ssh-agent >/dev/null || ( apk add --update openssh )"
+    - eval $(ssh-agent -s)
+    - echo "$ID_RSA_STAGING" | tr -d '\r' | ssh-add -
+    - mkdir -p ~/.ssh
+    - chmod 700 ~/.ssh
+    - ssh-keyscan $SERVER_STAGING >> ~/.ssh/known_hosts
+    - chmod 644 ~/.ssh/known_hosts
+    # - echo "$DOCKER_REGISTRY_IP $DOCKER_REGISTRY_HOST" >> /etc/hosts
+    # - docker login -u $DOCKER_REGISTRY_USER -p $DOCKER_REGISTRY_PASS $DOCKER_REGISTRY_HOST
+  script:
+    # - docker stack deploy -c deploy/production.yml --with-registry-auth notification-prod
+    - ssh $SERVER_PRODUCTION_USER@$SERVER_PRODUCTION "docker login -u $DOCKER_REGISTRY_USER -p $DOCKER_REGISTRY_PASS $DOCKER_REGISTRY_HOST"
+    - ssh $SERVER_PRODUCTION_USER@$SERVER_PRODUCTION "docker pull $IMAGE_VERSION"
+    - ssh $SERVER_PRODUCTION_USER@$SERVER_PRODUCTION "mkdir -p $PRODUCTION_DIR_PATH"
+    - scp ./deploy/staging.yml $SERVER_PRODUCTION_USER@$SERVER_PRODUCTION:$PRODUCTION_DIR_PATH/production.yml
+    - scp ./deploy/staging.env $SERVER_PRODUCTION_USER@$SERVER_PRODUCTION:$PRODUCTION_DIR_PATH/production.env
+    - ssh $SERVER_PRODUCTION_USER@$SERVER_PRODUCTION "IMAGE_VERSION=$IMAGE_VERSION bash -c 'docker stack deploy -c $STAGING_DIR_PATH/production.yml --with-registry-auth $STAGING_STACK_NAME'"
+  tags:
+    - deploy-production
+  only:
+    - tags
