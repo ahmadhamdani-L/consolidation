@@ -1,0 +1,27 @@
+package constant
+
+// General
+const APP_NAME = "codeid-boiler"
+
+// Db
+const DB_DEFAULT_CREATED_BY = "system"
+
+// ALL MODUL
+const MODUL_STATUS_DRAFT int = 1
+const MODUL_STATUS_CONFIRMED int = 2
+const MODUL_STATUS_CONSOLIDATED int = 3
+
+// VALIDATION
+const VALIDATION_STATUS_NOT_BALANCE int = 1
+const VALIDATION_STATUS_BALANCE int = 2
+const VALIDATION_NOTE_NOT_BALANCE string = "Imbalance"
+const VALIDATION_NOTE_BALANCE string = "Balance"
+
+//CONSOLIDATION
+
+// IMPORTED WORKSHEET
+const IMPORTED_WORKSHEET_STATUS_UNCOMPLETED int = 1
+const IMPORTED_WORKSHEET_STATUS_COMPLETED int = 2
+
+// MODUL
+const TOTAL_MODUL_TO_VALIDATED int = 8

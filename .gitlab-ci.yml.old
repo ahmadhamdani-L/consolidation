@@ -1,0 +1,84 @@
+variables:
+  IMAGE_VERSION: "$CI_REGISTRY_IMAGE:$IMAGE_TAG"
+
+stages:
+  - build
+  - publish
+  - deploy development
+  # - deploy production
+
+build:
+  image: golang:1.17.8-alpine
+  stage: build
+  before_script:
+    - |
+        if [ "$CI_COMMIT_TAG" != "" ]; then 
+          echo "IMAGE_TAG=$CI_COMMIT_TAG" >> build.env; 
+        else 
+          echo "IMAGE_TAG=$CI_COMMIT_SHORT_SHA" >> build.env;
+        fi
+  script:
+    - apk add build-base
+    - mkdir -p build/bin
+    - go mod tidy
+    # undefined: "github.com/swaggo/swag".Spec #1126
+    # https://github.com/swaggo/swag/issues/1126
+    - go install github.com/swaggo/swag/cmd/swag@v1.7.8
+    - swag init
+    - GOOS=linux go build -tags musl -ldflags="-s -w" -o build/bin/api
+  artifacts:
+    paths:
+      - build
+    reports:
+      dotenv: build.env
+  tags:
+    - staging
+  only:
+    - development
+
+publish:
+  stage: publish
+  image: tiangolo/docker-with-compose
+  before_script:
+    - echo $CI_BUILD_TOKEN | docker login -u "$CI_REGISTRY_USER" --password-stdin $CI_REGISTRY
+  script:
+    - docker pull $CI_REGISTRY_IMAGE:latest || true
+    - docker build --build-arg PASSWORD=$PASSWORD_DEVELOPMENT --cache-from $CI_REGISTRY_IMAGE:latest --tag $CI_REGISTRY_IMAGE:$IMAGE_TAG --tag $CI_REGISTRY_IMAGE:latest .
+    - docker push $CI_REGISTRY_IMAGE:$IMAGE_TAG
+    - docker push $CI_REGISTRY_IMAGE:latest
+    - echo "IMAGE_TAG:$IMAGE_TAG"
+  tags:
+    - staging
+  only:
+    - development
+
+deploy development:
+  stage: deploy development
+  before_script:
+    - echo $CI_BUILD_TOKEN | docker login -u "$CI_REGISTRY_USER" --password-stdin $CI_REGISTRY
+  script:
+    - docker stack deploy -c ./deploy/dev-deploy.yml --with-registry-auth $CI_PROJECT_NAME
+  environment:
+    name: development
+    url: https://konsolidasi.codeoffice.net/dev/konsolidasi-core
+  tags:
+    - staging
+  only:
+    - development
+
+# deploy production:
+#   stage: deploy production
+#   before_script:
+#     - echo $CI_BUILD_TOKEN | docker login -u "$CI_REGISTRY_USER" --password-stdin $CI_REGISTRY
+#   script:
+#     - docker stack deploy -c ./deploy/prod-deploy.yml --with-registry-auth stb
+#   environment:
+#     name: production
+#     url: https://gapi.stbkita.com
+#   tags:
+#     - prod
+#   when: manual
+#   allow_failure: false
+#   only:
+#     - production
+#     - tags
