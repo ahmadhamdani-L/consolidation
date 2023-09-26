@@ -1,0 +1,140 @@
+variables:
+  IMAGE_VERSION: "$DOCKER_REGISTRY_HOST/$CI_PROJECT_PATH_SLUG:$CI_COMMIT_SHORT_SHA"
+
+stages:
+  # Development
+  - build-development
+  - push-development
+  - deploy-development
+
+  # Staging
+  - build-staging
+  - push-staging
+  - deploy-staging
+
+  # Production
+  - tag-production
+  - build-production
+  - push-production
+  - deploy-production
+
+# Stage - Development
+build-development:
+  stage: build-development
+  script:
+    - docker build -f Dockerfile.development -t $IMAGE_VERSION .
+  tags:
+    - development
+  only:
+    - development
+
+push-development:
+  stage: push-development
+  before_script:
+    - echo "$DOCKER_REGISTRY_IP $DOCKER_REGISTRY_HOST" >> /etc/hosts
+    - docker login -u $DOCKER_REGISTRY_USER -p $DOCKER_REGISTRY_PASS $DOCKER_REGISTRY_HOST
+  script:
+    - docker push $IMAGE_VERSION
+  tags:
+    - development
+  only:
+    - development
+
+deploy-development:
+  stage: deploy-development
+  before_script:
+    - echo "$DOCKER_REGISTRY_IP $DOCKER_REGISTRY_HOST" >> /etc/hosts
+    - docker login -u $DOCKER_REGISTRY_USER -p $DOCKER_REGISTRY_PASS $DOCKER_REGISTRY_HOST
+  script:
+    - docker stack deploy -c deploy/development.yml --with-registry-auth konsolidasi-dev
+  tags:
+    - deploy-development
+  only:
+    - development
+
+# Stage - Staging
+build-staging:
+  stage: build-staging
+  script:
+    - docker build -f Dockerfile.staging -t $IMAGE_VERSION .
+  tags:
+    - staging
+  only:
+    - staging
+
+push-staging:
+  stage: push-staging
+  before_script:
+    - echo "$DOCKER_REGISTRY_IP $DOCKER_REGISTRY_HOST" >> /etc/hosts
+    - docker login -u $DOCKER_REGISTRY_USER -p $DOCKER_REGISTRY_PASS $DOCKER_REGISTRY_HOST
+  script:
+    - docker push $IMAGE_VERSION
+  tags:
+    - staging
+  only:
+    - staging
+
+deploy-staging:
+  stage: deploy-staging
+  before_script:
+    - echo "$DOCKER_REGISTRY_IP $DOCKER_REGISTRY_HOST" >> /etc/hosts
+    - docker login -u $DOCKER_REGISTRY_USER -p $DOCKER_REGISTRY_PASS $DOCKER_REGISTRY_HOST
+  script:
+    - docker stack deploy -c deploy/staging.yml --with-registry-auth konsolidasi-stag
+  tags:
+    - deploy-staging
+  only:
+    - staging
+
+# Stage - Production
+tag-production:
+  stage: tag-production
+  image: node:16.14.2-alpine
+  variables:
+    GITLAB_TOKEN: $SEMANTIC_RELEASE_TOKEN
+  before_script:
+    - apk add --no-cache git
+    - npm install -g semantic-release @semantic-release/gitlab
+  script:
+    - semantic-release
+    - git tag --points-at > version
+  artifacts:
+    paths:
+      - version
+  tags:
+    - production
+  only:
+    - production
+
+build-production:
+  stage: build-production
+  script:
+    - docker build -f Dockerfile.production -t $IMAGE_VERSION .
+  tags:
+    - production
+  only:
+    - tags
+
+push-production:
+  stage: push-production
+  before_script:
+    - echo "$DOCKER_REGISTRY_IP $DOCKER_REGISTRY_HOST" >> /etc/hosts
+    - docker login -u $DOCKER_REGISTRY_USER -p $DOCKER_REGISTRY_PASS $DOCKER_REGISTRY_HOST
+  script:
+    - docker push $IMAGE_VERSION
+  tags:
+    - production
+  only:
+    - tags
+
+deploy-production:
+  stage: deploy-production
+  before_script:
+    - echo "$DOCKER_REGISTRY_IP $DOCKER_REGISTRY_HOST" >> /etc/hosts
+    - docker login -u $DOCKER_REGISTRY_USER -p $DOCKER_REGISTRY_PASS $DOCKER_REGISTRY_HOST
+  script:
+    - docker stack deploy -c deploy/production.yml --with-registry-auth konsolidasi-prod
+  tags:
+    - deploy-production
+  only:
+    - tags
