@@ -1,0 +1,6 @@
+assets/*
+*.xlsx
+.vscode/launch.json
+# .env.development
+.env
+internal/kafka/kafka.properties
