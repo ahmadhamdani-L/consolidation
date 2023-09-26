@@ -1,0 +1,15 @@
+{
+    "admin_insecure":true,
+    "client_insecure":true,
+    "presence": true,
+    "history_size": 10,
+    "history_ttl": "30s",
+    
+    "namespaces": [
+        {
+          "name": "IMPORT",
+          "history_size": 10,
+          "history_ttl": "300s"
+        }
+    ]
+}
